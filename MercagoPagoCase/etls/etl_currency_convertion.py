@@ -11,10 +11,9 @@ with open("site_ids.json", "r", encoding="utf-8") as f:
 from config import COUNTRY, STATUS_ID, PAGING_LIMIT,CONDITION
 import pandas as pd
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from database.database_connection import get_bigquery_client
 from google.cloud import bigquery
-
 
 def main():
     load_dotenv('.env')
@@ -22,14 +21,25 @@ def main():
     CLIENT_SECRET = os.getenv('CLIENT_SECRET')
     REFRESH_TOKEN = os.getenv('REFRESH_TOKEN')
     ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
+    with open("last_token_time.json", "r", encoding="utf-8") as last_token_file:
+        last_token_time = json.load(last_token_file)["last_token_time"]
 
-    get_new_token = input('Do you want to get a new refresh token? (y/n): ')
-    if get_new_token.lower() == 'y':
+    if datetime.now() - datetime.fromisoformat(last_token_time) > timedelta(hours=4):
+        #get_new_token = input('Do you want to get a new refresh token? (y/n): ')
+        get_new_token = True
+    else:
+        get_new_token = False
+        
+    if get_new_token:
         new_access_token, new_refresh_token = generate_new_tokens(CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN)
         update_env_token('ACCESS_TOKEN',new_access_token)
         update_env_token('REFRESH_TOKEN',new_refresh_token)
         ACCESS_TOKEN = new_access_token
         REFRESH_TOKEN = new_refresh_token
+        last_token_time = datetime.now().isoformat()
+    with open("last_token_time.json", "w", encoding="utf-8") as f:
+        f.write('{"last_token_time" :'+ '"' + last_token_time+'"}')
+
 
     currency_data = {
         'from_currency_id':[],
@@ -59,8 +69,8 @@ def main():
     job_run_timestamp = datetime.now()
     currency_convert_df['job_run_timestamp'] = job_run_timestamp
 
-
-    upload = input(f'Do you want to upload the currency convertion table to the database? (y/n) ')
+    upload = 'y'
+    #upload = input(f'Do you want to upload the currency convertion table to the database? (y/n) ')
     if upload == 'y':
         bigquery_client = get_bigquery_client()
         table_currency_convertion = "mercadolivrecase.currency_convertion"
